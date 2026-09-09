@@ -46,9 +46,17 @@ export default function SuccessPage({ order, onNewOrder }) {
           <p className="flex items-center gap-2"><MapPin size={13} /> {order.address}</p>
           <p className="flex items-center gap-2"><Landmark size={13} /> {order.bank_name} — {order.account_name}</p>
         </div>
-        <p className="mt-4 rounded-lg bg-[#E8A76A]/20 px-3 py-2 text-xs font-semibold text-[#3D2817]">
-          Төлбөрийг банкны шилжүүлгээр төлнө үү. Манай ажилтан тантай удахгүй холбогдох болно.
-        </p>
+        <div data-testid="payment-info" className="mt-4 rounded-lg bg-[#E8A76A]/20 px-3 py-3 text-xs text-[#3D2817]">
+          <p className="font-bold">Төлбөрөө доорх данс руу шилжүүлнэ үү:</p>
+          <div className="mt-2 space-y-1">
+            <p className="flex justify-between"><span>Банк</span><span className="font-semibold">{order.payment_bank}</span></p>
+            <p className="flex justify-between"><span>Данс</span><span data-testid="payment-account" className="font-semibold">{order.payment_account}</span></p>
+            <p className="flex justify-between"><span>Хүлээн авагч</span><span className="font-semibold">{order.payment_holder}</span></p>
+            <p className="flex justify-between"><span>Гүйлгээний утга</span><span data-testid="payment-code" className="font-heading font-bold text-[#C85C4A]">{order.payment_code}</span></p>
+            <p className="flex justify-between"><span>Дүн</span><span className="font-semibold">{order.total.toLocaleString()}₮</span></p>
+          </div>
+          <p className="mt-2 font-semibold">Гүйлгээний утгад {order.payment_code} кодыг заавал бичнэ үү. Манай ажилтан тантай удахгүй холбогдох болно.</p>
+        </div>
       </div>
 
       <button data-testid="new-order-button" onClick={onNewOrder}

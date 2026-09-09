@@ -1,0 +1,14 @@
+{
+  "buildCommand": "cd frontend && yarn install && CI=false yarn build",
+  "outputDirectory": "frontend/build",
+  "installCommand": "echo skip",
+  "functions": {
+    "api/[[...path]].py": {
+      "runtime": "@vercel/python@4.3.0",
+      "includeFiles": "backend/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

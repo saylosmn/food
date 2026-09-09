@@ -8,7 +8,8 @@ import CartPage from "@/components/CartPage";
 import CheckoutPage from "@/components/CheckoutPage";
 import SuccessPage from "@/components/SuccessPage";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+// Vercel дээр frontend болон API нэг домэйн дээр байдаг тул хоосон base хангалттай.
+const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
 export default function App() {
   const [page, setPage] = useState("menu");

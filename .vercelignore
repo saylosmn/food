@@ -1,0 +1,5 @@
+tests
+test_reports
+backend/tests
+backend/pytest.ini
+memory

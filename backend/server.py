@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,9 +14,33 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Serverless-д (Vercel) модуль cold start бүрт дахин ачаалагддаг тул
+# клиентийг эхний хэрэглээ дээр залхуу байдлаар үүсгэнэ.
+_client: AsyncIOMotorClient | None = None
+_seeded = False
+
+
+def get_db():
+    global _client
+    if _client is None:
+        mongo_url = os.environ.get('MONGO_URL')
+        if not mongo_url:
+            raise HTTPException(status_code=500, detail="MONGO_URL тохируулаагүй байна")
+        _client = AsyncIOMotorClient(mongo_url)
+    return _client[os.environ.get('DB_NAME', 'food_delivery')]
+
+
+async def ensure_seeded(db):
+    global _seeded
+    if _seeded:
+        return
+    if await db.menu.count_documents({}) == 0:
+        await db.menu.insert_many([dict(item) for item in MENU_ITEMS])
+    _seeded = True
+
+PAYMENT_BANK = "М банк"
+PAYMENT_ACCOUNT = "8000499100"
+PAYMENT_HOLDER = "Санжид Цэрэнбат"
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -88,6 +113,10 @@ class Order(BaseModel):
     bank_name: str
     account_name: str
     notes: str = ""
+    payment_bank: str = PAYMENT_BANK
+    payment_account: str = PAYMENT_ACCOUNT
+    payment_holder: str = PAYMENT_HOLDER
+    payment_code: str = Field(default_factory=lambda: f"{random.randint(1000, 9999)}")
     status: str = "Баталгаажсан"
     delivery_time: str = "20-60 минут"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -100,12 +129,16 @@ async def root():
 
 @api_router.get("/menu")
 async def get_menu():
+    db = get_db()
+    await ensure_seeded(db)
     items = await db.menu.find({}, {"_id": 0}).to_list(1000)
     return items
 
 
 @api_router.post("/orders", response_model=Order)
 async def create_order(input: OrderCreate):
+    db = get_db()
+    await ensure_seeded(db)
     if not input.items:
         raise HTTPException(status_code=400, detail="Сагс хоосон байна")
     menu_docs = await db.menu.find({}, {"_id": 0}).to_list(1000)
@@ -134,6 +167,7 @@ async def create_order(input: OrderCreate):
 
 @api_router.get("/orders/{order_id}", response_model=Order)
 async def get_order(order_id: str):
+    db = get_db()
     doc = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Захиалга олдсонгүй")
@@ -154,14 +188,3 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-@app.on_event("startup")
-async def seed_menu():
-    count = await db.menu.count_documents({})
-    if count == 0:
-        await db.menu.insert_many([dict(item) for item in MENU_ITEMS])
-        logger.info("Menu seeded with %d items", len(MENU_ITEMS))
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
