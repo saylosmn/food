@@ -3,40 +3,10 @@ import os
 import random
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# Serverless-д (Vercel) модуль cold start бүрт дахин ачаалагддаг тул
-# клиентийг эхний хэрэглээ дээр залхуу байдлаар үүсгэнэ.
-_client: AsyncIOMotorClient | None = None
-_seeded = False
-
-
-def get_db():
-    global _client
-    if _client is None:
-        mongo_url = os.environ.get('MONGO_URL')
-        if not mongo_url:
-            raise HTTPException(status_code=500, detail="MONGO_URL тохируулаагүй байна")
-        _client = AsyncIOMotorClient(mongo_url)
-    return _client[os.environ.get('DB_NAME', 'food_delivery')]
-
-
-async def ensure_seeded(db):
-    global _seeded
-    if _seeded:
-        return
-    if await db.menu.count_documents({}) == 0:
-        await db.menu.insert_many([dict(item) for item in MENU_ITEMS])
-    _seeded = True
 
 PAYMENT_BANK = "М банк"
 PAYMENT_ACCOUNT = "8000499100"
@@ -44,6 +14,9 @@ PAYMENT_HOLDER = "Санжид Цэрэнбат"
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+# Захиалгыг санах ойд хадгална (мэдээллийн бааз шаардахгүй).
+ORDERS: dict[str, dict] = {}
 
 IMG = "?crop=entropy&cs=srgb&fm=jpg&q=85&w=800&auto=format&fit=crop"
 
@@ -129,21 +102,15 @@ async def root():
 
 @api_router.get("/menu")
 async def get_menu():
-    db = get_db()
-    await ensure_seeded(db)
-    items = await db.menu.find({}, {"_id": 0}).to_list(1000)
-    return items
+    return MENU_ITEMS
 
 
 @api_router.post("/orders", response_model=Order)
 async def create_order(input: OrderCreate):
-    db = get_db()
-    await ensure_seeded(db)
     if not input.items:
         raise HTTPException(status_code=400, detail="Сагс хоосон байна")
-    menu_docs = await db.menu.find({}, {"_id": 0}).to_list(1000)
-    price_map = {m["id"]: m["price"] for m in menu_docs}
-    name_map = {m["id"]: m["name"] for m in menu_docs}
+    price_map = {m["id"]: m["price"] for m in MENU_ITEMS}
+    name_map = {m["id"]: m["name"] for m in MENU_ITEMS}
     total = 0
     items = []
     for item in input.items:
@@ -161,14 +128,13 @@ async def create_order(input: OrderCreate):
         account_name=input.account_name,
         notes=input.notes or "",
     )
-    await db.orders.insert_one(order.model_dump())
+    ORDERS[order.id] = order.model_dump()
     return order
 
 
 @api_router.get("/orders/{order_id}", response_model=Order)
 async def get_order(order_id: str):
-    db = get_db()
-    doc = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    doc = ORDERS.get(order_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Захиалга олдсонгүй")
     return doc
