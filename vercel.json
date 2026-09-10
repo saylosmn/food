@@ -4,11 +4,13 @@
   "installCommand": "echo skip",
   "functions": {
     "api/[[...path]].py": {
-      "runtime": "@vercel/python@4.3.0",
       "includeFiles": "backend/**"
     }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
